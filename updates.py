@@ -14,14 +14,15 @@ def send_updates():
             actual_ads = get_ads_list(url['url'])
             new_ads = get_new_ads(actual_ads, old_ads)
 
-            for n_a in new_ads:
-                msg = n_a['title'].rstrip() + '\n' + n_a['price'].rstrip() + \
-                      '\n' + n_a['url']
+            for new_ad in new_ads:
+                title = new_ad.title.rstrip() + "\n"
+                price = new_ad.price.rstrip() + "\n" if new_ad.price else ""
+                msg = title + price + new_ad.url
 
-                # if n_a['img']:
+                # if new_ad['img']:
                 #     from utils import get_img_file_by_url
                 #
-                #     img_file = get_img_file_by_url(n_a['img'])
+                #     img_file = get_img_file_by_url(new_ad['img'])
                 #     if img_file:
                 #         bot.send_photo(i['uid'], img_file)
 

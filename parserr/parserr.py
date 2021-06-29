@@ -1,8 +1,24 @@
+#!/usr/bin/env python3
 import json
 import requests
 import time
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup # type: ignore
 from requests import RequestException
+
+from typing import Optional, List
+
+
+class Advertizement:
+    title: str
+    price: Optional[str]
+    url: str
+    image: Optional[str] # link to image
+
+    def __init__(self, title, url, image=None, price=None) -> None:
+        self.title = title
+        self.url = url
+        self.image = image
+        self.price = price
 
 
 def get_proxy():
@@ -36,56 +52,102 @@ def get_html(url):
     return response.content
 
 
-def get_ads_list(avito_search_url):
+def parse_ads_classful(soup: BeautifulSoup) -> List[Advertizement]:
+    """
+    Parse ads with specific class name. Doesn't work sometimes
+    """
+    import re
+    ad_link_re = re.compile("^iva-item-sliderLink")
+
+    ads = soup.find_all("a", {"class": ad_link_re})
+
+    ads_list = []
+    for ad in ads:
+        try:
+            title = ad.attrs.get("title")
+            url = ad.attrs["href"]
+        except NameError:
+            continue
+
+        imgs = ad.find_all("img")
+        if len(imgs) > 0:
+            img = imgs[0].attrs["src"]
+        else:
+            img = None
+
+        ads_list.append(Advertizement(
+            title=title.replace(u'\xa0', u' '),
+            url=url,
+            image=img,
+        ))
+
+    return ads_list
+
+def parse_ads_marker(soup: BeautifulSoup) -> List[Advertizement]:
+    """
+    Parse ads only knowing that they have specific data marker
+    """
+
+    ads = soup.find_all("a", {"data-marker": "item/link"})
+    ads_list = []
+    for ad in ads:
+        try:
+            url = ad.attrs["href"]
+        except NameError:
+            continue
+        children = list(ad.children)
+        if len(ad.children) == 1:
+            body = ad.children[0]
+            if not isinstance(body, str):
+                title = body
+                # only thus we append new
+                ads_list.append(Advertizement(title, url))
+    return ads_list
+
+def parse_ads(soup: BeautifulSoup) -> List[Advertizement]:
+    p1 = parse_ads_classful(soup)
+    if len(p1) != 0:
+        return p1
+    return parse_ads_marker(soup)
+
+
+def get_ads_list(avito_search_url: str) -> List[Advertizement]:
     """
     :param avito_search_url: url like https://m.avito.ru/kazan/avtomobili/inomarki?pmax=200000&pmin=50000
     :return: ads list
     """
     html = get_html(avito_search_url)
     soup = BeautifulSoup(html, 'lxml')
-    ads = soup.find_all('article', {'class': 'b-item'})
-
-    ads_list = []
-    for ad in ads:
-        ad_wrapper = ad.find('div', {'class': 'b-item-wrapper'})
-        ad_wrapper_a = ad_wrapper.find('a')
-
-        ad_id = ad.attrs['data-item-id']
-        ad_url = 'https://m.avito.ru' + ad_wrapper_a.attrs['href']
-        ad_header = ad_wrapper_a.find('h3').text
-
-        ad_price = ad_wrapper_a.find('div', {'class': 'item-price'})
-        ad_price = ad_price.find('span').text
-
-        ad_img = ad_wrapper_a.find('div', {'class': 'item-img'})
-        ad_img_span = ad_img.find('span')
-
-        if ad_img_span:
-            ad_img = ad_img_span.attrs['style']
-            ad_img = ad_img.split(' ')[1]
-            ad_img = 'https://' + ad_img[6:-2]
-        else:
-            ad_img = None
-
-        is_ad_premium = 'item-vip' in ad.attrs['class']
-        is_ad_highlight = 'item-highlight' in ad.attrs['class']
-
-        # print("%-70s %-15s %-15s" % (ad_header, ad_price, ad_id))
-        if not is_ad_premium and not is_ad_highlight:
-            ads_list.append({
-                'id': ad_id,
-                'title': ad_header.replace(u'\xa0', u' '),
-                'price': ad_price.replace(u'\xa0', u' '),
-                'url': ad_url,
-                'img': ad_img
-            })
-
-    return ads_list
+    return parse_ads(soup)
 
 
-def get_new_ads(new, old):
-    _ = []
+def get_new_ads(new: List[Advertizement], old_: List[Advertizement]) -> List[Advertizement]:
+    result = []
+    old = set(old_)
     for ad in new:
         if ad not in old:
-            _.append(ad)
-    return _
+            result.append(ad)
+    return result
+
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) < 2:
+        print(f"Usage: {sys.argv[0]} url\n\tParse the current ads and print them")
+        sys.exit(1)
+    url = sys.argv[1]
+    html = get_html(url)
+    soup = BeautifulSoup(html, 'lxml')
+
+    p1 = parse_ads_classful(soup)
+    if len(p1) == 0:
+        print("No ads with classful method")
+    else:
+        for ad in p1:
+            print(f"{ad.title}:\n\turl: {ad.url}\n\timage: {ad.image}")
+
+    p2 = parse_ads_marker(soup)
+    if len(p2) == 0:
+        print("No ads with marker method")
+    else:
+        for ad in p2:
+            print(f"{ad.title}:\n\turl: {ad.url}")
