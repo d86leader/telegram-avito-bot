@@ -31,15 +31,11 @@ def save_url(uid, search_url, search_name):
     :return boolean: запись добавлена / не добавлена (ошибка бд)
     """
     from parserr import parserr
-    try:
-        search_collection.update_one({'uid': uid}, {'$push': {'tracking_urls': {
-            'url': search_url,
-            'name': search_name,
-            'ads': parserr.get_ads_list(search_url)
-        }}}, upsert=True)
-        return True
-    except:
-        return False
+    search_collection.update_one({'uid': uid}, {'$push': {'tracking_urls': {
+        'url': search_url,
+        'name': search_name,
+        'ads': [x.to_dict() for x in parserr.get_ads_list(search_url)]
+    }}}, upsert=True)
 
 
 def is_link_already_tracking_by_user(uid, search_url):

@@ -38,9 +38,7 @@ def add_search(message):
 # Waiting url
 def waiting_url_step(message):
     search_url = message.text
-    # На случай, если пользователь отравит такое сообщение: "https://avito.ru/kazan/avto/vaz бла бла"
-    search_url = search_url.split(' ')[0]
-    search_url = search_url.lower()
+    search_url = search_url.strip()
 
     if not utils.check_avito_url(search_url):
         msg = bot.send_message(message.chat.id, 'Неккоректная ссылка.')
@@ -71,16 +69,12 @@ def select_search_name_step(message):
     # TODO Validate title (search_name)
     try:
         search_url = db.get_temp_url(message.chat.id)
-    except:
-        bot.send_message(message.chat.id, 'Ошибка сервера. Повторите попытку позже.')
-        return
-
-    if db.save_url(message.chat.id, search_url, search_name):
+        db.save_url(message.chat.id, search_url, search_name)
         bot.send_message(message.chat.id, 'Ссылка {} сохранена под именем "{}".'.format(search_url, search_name))
         bot.send_message(message.chat.id, 'Теперь вы будете получать уведомления о новых объявлениях.')
+    except Exception as e:
+        bot.send_message(message.chat.id, 'Ошибка: {}'.format(e))
 
-    else:
-        bot.send_message(message.chat.id, 'Произошла ошибка при добавлении. Повторите ошибку позже.')
 
 
 # # # End adding search # # #
@@ -139,6 +133,17 @@ def send_list(message):
 
 
 # # # End send list of tracking urls # # #
+
+
+# # # Update now # # #
+@bot.message_handler(commands=["update"])
+def update_immediately(message):
+    import updates
+    try:
+        new = updates.send_updates()
+        bot.send_message(message.chat.id, f"Новых объявлений: {new}")
+    except Exception as e:
+        bot.send_message(message.chat.id, "Ошибка при обновлении: {}".format(e))
 
 
 if __name__ == '__main__':

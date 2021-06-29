@@ -16,9 +16,26 @@ class Advertizement:
 
     def __init__(self, title, url, image=None, price=None) -> None:
         self.title = title
-        self.url = url
+        self.url = "https://avito.ru" + url
         self.image = image
         self.price = price
+
+    def to_dict(self) -> dict:
+        return {
+            "title": self.title,
+            "price": self.price,
+            "url": self.url,
+            "image": self.image,
+        }
+
+    @staticmethod
+    def from_dict(d: dict) -> 'Advertizement':
+        return Advertizement(
+            d["title"],
+            d["url"],
+            d.get("image", None),
+            d.get("price", None),
+        )
 
 
 def get_proxy():
@@ -96,8 +113,8 @@ def parse_ads_marker(soup: BeautifulSoup) -> List[Advertizement]:
         except NameError:
             continue
         children = list(ad.children)
-        if len(ad.children) == 1:
-            body = ad.children[0]
+        if len(children) == 1:
+            body = children[0]
             if not isinstance(body, str):
                 title = body
                 # only thus we append new
@@ -121,9 +138,9 @@ def get_ads_list(avito_search_url: str) -> List[Advertizement]:
     return parse_ads(soup)
 
 
-def get_new_ads(new: List[Advertizement], old_: List[Advertizement]) -> List[Advertizement]:
+def get_new_ads(new: List[Advertizement], old_: dict) -> List[Advertizement]:
     result = []
-    old = set(old_)
+    old = set(Advertizement.from_dict(x) for x in old_)
     for ad in new:
         if ad not in old:
             result.append(ad)
