@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import re
 import requests
 import time
 from bs4 import BeautifulSoup # type: ignore
@@ -14,9 +15,12 @@ class Advertizement:
     url: str
     image: Optional[str] # link to image
 
+    _prefix_re = re.compile("(https?://)?(m\.)?avito.ru")
+
     def __init__(self, title, url, image=None, price=None) -> None:
         self.title = title
-        self.url = "https://avito.ru" + url
+        site_prefix ="https://avito.ru"
+        self.url = (site_prefix if not self._prefix_re.match(url) else "") + url
         self.image = image
         self.price = price
 
@@ -36,6 +40,41 @@ class Advertizement:
             d.get("image", None),
             d.get("price", None),
         )
+
+    def lax_eq(self, other) -> bool:
+        if not isinstance(other, self.__class__):
+            return False
+        return self.url == other.url
+
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, self.__class__):
+            return False
+
+        def optional_eq(a, b) -> bool:
+            return a is None or b is None or a == b
+
+        return ( self.title == other.title
+            and  self.url == other.url
+            and  optional_eq(self.image, other.image)
+            and  optional_eq(self.price, other.price)
+        )
+
+    def __ne__(self, other) -> bool:
+        return not self.__eq__(other)
+
+    def __hash__(self):
+        return hash((self.title, self.url, self.image, self.price))
+
+    def __repr__(self) -> str:
+        return (
+            f"Advertizement( \"{self.title}\", \"{self.url}\""
+            + (f", image=\"{self.image}\"" if self.image else "")
+            + (f", price=\"{self.price}\"" if self.price else "")
+            + " )"
+        )
+
+    def __str__(self) -> str:
+        return repr(self)
 
 
 def get_proxy():
@@ -73,7 +112,6 @@ def parse_ads_classful(soup: BeautifulSoup) -> List[Advertizement]:
     """
     Parse ads with specific class name. Doesn't work sometimes
     """
-    import re
     ad_link_re = re.compile("^iva-item-sliderLink")
 
     ads = soup.find_all("a", {"class": ad_link_re})
@@ -140,10 +178,13 @@ def get_ads_list(avito_search_url: str) -> List[Advertizement]:
 
 def get_new_ads(new: List[Advertizement], old_: dict) -> List[Advertizement]:
     result = []
-    old = set(Advertizement.from_dict(x) for x in old_)
-    for ad in new:
-        if ad not in old:
-            result.append(ad)
+    old = [Advertizement.from_dict(x) for x in old_]
+    for new_ad in new:
+        for old_ad in old:
+            if old_ad.lax_eq(new_ad):
+                break
+        else:
+            result.append(new_ad)
     return result
 
 if __name__ == "__main__":
@@ -160,11 +201,11 @@ if __name__ == "__main__":
         print("No ads with classful method")
     else:
         for ad in p1:
-            print(f"{ad.title}:\n\turl: {ad.url}\n\timage: {ad.image}")
+            print(f"{ad}")
 
     p2 = parse_ads_marker(soup)
     if len(p2) == 0:
         print("No ads with marker method")
     else:
         for ad in p2:
-            print(f"{ad.title}:\n\turl: {ad.url}")
+            print(f"{ad}")

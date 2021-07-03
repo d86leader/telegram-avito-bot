@@ -1,5 +1,5 @@
-import telebot
-import db
+import telebot # type: ignore
+from db import DbAccess
 import utils
 import os
 
@@ -8,6 +8,7 @@ API_TOKEN = os.environ.get('BOT_API_TOKEN')
 if not API_TOKEN:
     raise KeyError('Telegram bot token missed')
 
+db = DbAccess()
 bot = telebot.TeleBot(API_TOKEN)
 
 
@@ -140,8 +141,8 @@ def send_list(message):
 def update_immediately(message):
     import updates
     try:
-        new = updates.send_updates()
-        bot.send_message(message.chat.id, f"Новых объявлений: {new}")
+        new, total = updates.send_updates(db)
+        bot.send_message(message.chat.id, f"Всего объявлений: {total}\nНовых объявлений: {new}")
     except Exception as e:
         bot.send_message(message.chat.id, "Ошибка при обновлении: {}".format(e))
 

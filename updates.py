@@ -1,11 +1,14 @@
-import db
+from db import DbAccess
 from parserr.parserr import get_ads_list, get_new_ads
 from main import bot
 import time
 
+from typing import Tuple
 
-def send_updates():
+
+def send_updates(db: DbAccess) -> Tuple[int, int]:
     sce = db.get_search_collection_entries()
+    total = 0
     total_new = 0
 
     for i in sce:
@@ -13,6 +16,7 @@ def send_updates():
         for url in i['tracking_urls']:
             old_ads = url['ads']
             actual_ads = get_ads_list(url['url'])
+            total += len(actual_ads)
             new_ads = get_new_ads(actual_ads, old_ads)
 
             for new_ad in new_ads:
@@ -20,13 +24,6 @@ def send_updates():
                 title = new_ad.title.rstrip() + "\n"
                 price = new_ad.price.rstrip() + "\n" if new_ad.price else ""
                 msg = title + price + new_ad.url
-
-                # if new_ad['img']:
-                #     from utils import get_img_file_by_url
-                #
-                #     img_file = get_img_file_by_url(new_ad['img'])
-                #     if img_file:
-                #         bot.send_photo(i['uid'], img_file)
 
                 bot.send_message(i['uid'], msg)
 
@@ -38,14 +35,15 @@ def send_updates():
 
         db.set_actual_ads(i['uid'], tracking_urls)
 
-    return total_new
+    return (total_new, total)
 
 
 if __name__ == '__main__':
-    import schedule
+    db = DbAccess()
+    import schedule # type: ignore
 
-    send_updates()
-    schedule.every(2).minutes.do(send_updates)
+    send_updates(db)
+    schedule.every(2).minutes.do(lambda: send_updates(db))
 
     while True:
         schedule.run_pending()
